@@ -75,6 +75,26 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           Compress-Archive -Path dist\PostureGuard -DestinationPath dist\PostureGuard-Windows-portable.zip
 
+      - name: Thử cài, chạy và gỡ bộ cài Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Start-Process dist\PostureGuard-Setup-Windows.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/TASKS=startup' -Wait
+          $exe = "$env:LOCALAPPDATA\Programs\PostureGuard\PostureGuard.exe"
+          if (-not (Test-Path $exe)) { Write-Error "Không thấy $exe sau khi cài"; exit 1 }
+          $run = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run').PostureGuard
+          if ($run -ne "`"$exe`"") { Write-Error "Mục tự chạy sai: $run"; exit 1 }
+          Get-Process PostureGuard -ErrorAction SilentlyContinue | Stop-Process -Force
+          Remove-Item "$HOME\.posture_guard\app.log" -ErrorAction SilentlyContinue
+          $p = Start-Process -FilePath $exe -ArgumentList "--self-test" -Wait -PassThru
+          Get-Content "$HOME\.posture_guard\app.log" -Encoding utf8 -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0) { exit 1 }
+          Start-Process "$env:LOCALAPPDATA\Programs\PostureGuard\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES' -Wait
+          Start-Sleep 3
+          if (Test-Path $exe) { Write-Error "Gỡ cài đặt không xóa app"; exit 1 }
+          if ((Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run').PostureGuard) { Write-Error "Gỡ cài đặt không xóa mục tự chạy"; exit 1 }
+          Write-Host "Cài – chạy – gỡ: OK"
+
       - name: Nén app macOS
         if: runner.os == 'macOS'
         run: ditto -c -k --sequesterRsrc --keepParent dist/PostureGuard.app dist/PostureGuard-macOS.zip
