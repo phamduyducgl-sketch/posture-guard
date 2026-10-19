@@ -15,6 +15,17 @@ PostureGuard dùng camera của máy tính (camera laptop hoặc webcam) để t
 
 Các bản cũ hơn: [trang Releases](https://github.com/phamduyducgl-sketch/posture-guard/releases).
 
+## Bản điện thoại: Ngồi Ngay Ngắn (nhắc con ngồi đúng khi học bài)
+
+👉 **Mở bằng Safari trên iPhone (hoặc Chrome trên Android): https://phamduyducgl-sketch.github.io/posture-guard/**
+
+Đặt điện thoại trên giá hướng vào con khi con viết bài, đọc sách. Con **cúi quá sát vở, gục xuống bàn, nghiêng đầu hoặc lệch vai** thì điện thoại kêu "ting"; nếu vẫn chưa sửa thì phát câu nhắc bằng **giọng bố mẹ tự ghi âm** (chưa ghi thì dùng giọng đọc của máy). Ngồi đúng liên tục 10 phút được 1 ngôi sao, ngồi lâu thì nhắc nghỉ mắt. Có báo cáo từng buổi và theo tuần. Không cần cài app, hình ảnh vẫn chỉ xử lý trên máy.
+
+1. Mở link trên bằng **Safari**, bấm **Chia sẻ** → **Thêm vào MH chính**, rồi mở từ biểu tượng *Ngồi Ngay Ngắn*.
+2. **Thiết lập tư thế chuẩn:** chọn cách đặt máy. Nên đặt **chéo 45°**, lệch sang bên tay không cầm bút, để đo độ cúi chính xác nhất. Cho con ngồi đúng tư thế khi viết (mắt cách vở khoảng 30–35 cm), rồi bấm *Lưu tư thế chuẩn*.
+3. Vào **Ghi âm câu nhắc** để ghi vài câu bằng giọng của bạn.
+4. Bấm **Bắt đầu buổi học**. Nên cắm sạc nếu học lâu. Tắt **chế độ im lặng** và tăng âm lượng. Muốn con không thoát ra được thì bật **Truy cập được hướng dẫn** (Cài đặt → Trợ năng → Truy cập được hướng dẫn, rồi bấm nút sườn 3 lần khi đang ở trong app).
+
 ## Cài đặt
 
 ### Windows
@@ -125,6 +136,7 @@ Nhật ký từng phút: `~/.posture_guard/posture_log.csv` (`time, present_pct,
 - `pg_windows.py`: phần Windows (lớp tối + chấm đích bằng tkinter, icon khay hệ thống bằng pystray, tên camera qua DirectShow, nguồn điện, tự chạy qua registry)
 - Lớp phủ và icon chạy trong tiến trình con riêng (`--overlay-helper`, `--menubar-helper`), giao tiếp qua stdin/stdout, để vòng lặp sự kiện của giao diện không tranh chấp với OpenCV. Lỗi của chúng ghi ở `~/.posture_guard/overlay.log` và `menubar.log`
 - `packaging/`: cấu hình PyInstaller, bộ cài Inno Setup, icon
+- `web/`: bản điện thoại *Ngồi Ngay Ngắn* (HTML/JS thuần, MediaPipe Tasks Vision chạy trong trình duyệt). `web/posture.js` là phần đo tư thế và quyết định khi nào nhắc, kiểm thử bằng `node tests/test_posture.mjs`. Đẩy lên `main` thì [.github/workflows/pages.yml](.github/workflows/pages.yml) tự đưa lên GitHub Pages
 - `install_autostart.sh` / `uninstall_autostart.sh` / `request_camera_access.py`: tự chạy ngầm trên macOS khi dùng **mã nguồn** (app đóng gói thì dùng mục *Tự chạy khi mở máy* trên icon)
 
 ### Đóng gói và phát hành

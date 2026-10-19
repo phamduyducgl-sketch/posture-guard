@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Ngồi Ngay Ngắn</title>
+  <meta name="description" content="Nhắc con ngồi đúng tư thế khi học bài bằng camera điện thoại. Xử lý hoàn toàn trên máy, không lưu hình ảnh.">
+  <meta name="theme-color" content="#1f8a63">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Ngồi Ngay Ngắn">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Trang chủ -->
+  <section id="home" class="screen active">
+    <header class="hero">
+      <img src="icons/icon-192.png" alt="" class="hero-icon">
+      <h1>Ngồi Ngay Ngắn</h1>
+      <p class="lead">Nhắc con ngồi đúng tư thế khi viết bài, đọc sách</p>
+    </header>
+
+    <div class="card" id="install-hint" hidden>
+      <strong>Cài vào màn hình chính</strong>
+      <p>Trong Safari, bấm nút <b>Chia sẻ</b> <span aria-hidden="true">⬆︎</span> rồi chọn <b>Thêm vào MH chính</b>. Lần sau mở từ biểu tượng đó cho tiện.</p>
+    </div>
+
+    <div class="actions">
+      <button id="btn-start" class="primary big">Bắt đầu buổi học</button>
+      <button id="btn-calibrate" class="secondary">Thiết lập tư thế chuẩn</button>
+      <div class="row">
+        <button id="btn-voice" class="ghost">🎙️ Ghi âm câu nhắc</button>
+        <button id="btn-report" class="ghost">📊 Báo cáo</button>
+      </div>
+      <button id="btn-settings" class="ghost">⚙️ Cài đặt</button>
+    </div>
+
+    <p class="note">🔒 Hình ảnh chỉ được xử lý ngay trên điện thoại này, không lưu lại và không gửi đi đâu.</p>
+  </section>
+
+  <!-- Hiệu chỉnh -->
+  <section id="calibrate" class="screen">
+    <header class="bar"><button class="back" data-go="home" aria-label="Quay lại">‹</button><h2>Tư thế chuẩn</h2></header>
+
+    <div class="steps">
+      <p class="step-title">1. Cách đặt điện thoại</p>
+      <div class="seg" role="radiogroup" aria-label="Cách đặt điện thoại">
+        <button role="radio" data-mode="side" class="seg-btn">Chéo 45°<small>khuyên dùng</small></button>
+        <button role="radio" data-mode="front" class="seg-btn">Thẳng trước mặt</button>
+      </div>
+      <p class="hint" id="mode-hint"></p>
+    </div>
+
+    <div class="cam">
+      <video id="video" playsinline muted autoplay></video>
+      <canvas id="overlay"></canvas>
+      <div class="cam-status" id="cam-status">Đang mở camera…</div>
+    </div>
+
+    <div class="steps">
+      <p class="step-title">2. Cho con ngồi đúng tư thế khi viết</p>
+      <p class="hint">Lưng thẳng, hai vai ngang, mắt cách vở khoảng <b>1 gang tay người lớn (30–35 cm)</b>. Con cứ viết bình thường, không cần nhìn vào điện thoại.</p>
+      <button id="btn-save-base" class="primary big" disabled>Lưu tư thế chuẩn</button>
+    </div>
+  </section>
+
+  <!-- Đang theo dõi -->
+  <section id="monitor" class="screen dark">
+    <div class="mon-top">
+      <span id="mon-time">0:00</span>
+      <span id="mon-stars" aria-label="Số sao">⭐ 0</span>
+    </div>
+    <div class="mon-center">
+      <div class="cam mini" id="mon-cam" hidden></div>
+      <div id="mon-dot" class="dot grey" aria-hidden="true"></div>
+      <p id="mon-status" class="mon-status" aria-live="polite">Đang khởi động…</p>
+    </div>
+    <div class="mon-bottom">
+      <button id="btn-pause" class="dark-btn">Tạm dừng</button>
+      <button id="btn-end" class="dark-btn">Kết thúc</button>
+    </div>
+  </section>
+
+  <!-- Ghi âm -->
+  <section id="voice" class="screen">
+    <header class="bar"><button class="back" data-go="home" aria-label="Quay lại">‹</button><h2>Câu nhắc của bố mẹ</h2></header>
+    <p class="hint pad">Con thường nghe lời giọng bố mẹ hơn giọng máy. Mỗi câu ghi tối đa 6 giây. Chưa ghi thì app dùng giọng đọc của máy với câu mẫu.</p>
+    <div id="voice-list"></div>
+  </section>
+
+  <!-- Báo cáo -->
+  <section id="report" class="screen">
+    <header class="bar"><button class="back" data-go="home" aria-label="Quay lại">‹</button><h2>Báo cáo</h2></header>
+    <div id="report-body"></div>
+  </section>
+
+  <!-- Cài đặt -->
+  <section id="settings" class="screen">
+    <header class="bar"><button class="back" data-go="home" aria-label="Quay lại">‹</button><h2>Cài đặt</h2></header>
+    <form id="settings-form" class="form">
+      <label>Mức nhắc
+        <select name="level">
+          <option value="nhe">Nhẹ – chỉ nhắc khi cúi rất sát</option>
+          <option value="vua">Vừa</option>
+          <option value="chat">Chặt – nhắc sớm hơn</option>
+        </select>
+      </label>
+      <label>Sai tư thế bao lâu thì nhắc bằng giọng nói
+        <select name="voiceDelay"><option value="10">10 giây</option><option value="15">15 giây</option><option value="25">25 giây</option></select>
+      </label>
+      <label>Giữa 2 lần nhắc cách nhau ít nhất
+        <select name="cooldown"><option value="30">30 giây</option><option value="45">45 giây</option><option value="90">90 giây</option></select>
+      </label>
+      <label>Ngồi đúng bao lâu thì được 1 sao
+        <select name="praiseMinutes"><option value="5">5 phút</option><option value="10">10 phút</option><option value="15">15 phút</option></select>
+      </label>
+      <label>Nhắc nghỉ mắt sau
+        <select name="breakMinutes"><option value="20">20 phút</option><option value="30">30 phút</option><option value="45">45 phút</option><option value="0">Không nhắc</option></select>
+      </label>
+      <label class="check"><input type="checkbox" name="showCam"> Hiện hình camera khi đang học</label>
+      <button type="button" id="btn-test-sound" class="secondary">🔊 Nghe thử âm thanh</button>
+      <p class="hint">Âm thanh không phát được khi iPhone đang bật <b>chế độ im lặng</b> (gạt nút bên hông máy). Nhớ tăng âm lượng.</p>
+      <button type="button" id="btn-clear" class="danger">Xoá tư thế chuẩn và báo cáo</button>
+    </form>
+  </section>
+
+  <div id="toast" role="status" hidden></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
