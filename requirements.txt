@@ -1,0 +1,13 @@
+mediapipe>=0.10.30
+opencv-python>=4.8
+numpy
+certifi
+# macOS: tên camera, thanh menu, lớp làm mờ
+pyobjc-framework-AVFoundation ; sys_platform == "darwin"
+pyobjc-framework-Cocoa ; sys_platform == "darwin"
+pyobjc-framework-Quartz ; sys_platform == "darwin"
+# Windows: thông báo, tên camera, icon khay hệ thống
+plyer>=2.1 ; sys_platform == "win32"
+pygrabber>=0.2 ; sys_platform == "win32"
+pystray>=0.19 ; sys_platform == "win32"
+pillow ; sys_platform == "win32"
