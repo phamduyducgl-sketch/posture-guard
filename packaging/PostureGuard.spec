@@ -51,7 +51,7 @@ if IS_MAC:
         bundle_identifier="io.github.phamduyducgl-sketch.postureguard",
         info_plist={
             "CFBundleDisplayName": "PostureGuard",
-            "CFBundleShortVersionString": "1.0.0",
+            "CFBundleShortVersionString": "1.1.0",
             "LSUIElement": True,  # chỉ có icon trên thanh menu, không có icon trên Dock
             "LSMinimumSystemVersion": "12.0",
             "NSCameraUsageDescription": "PostureGuard dùng camera để theo dõi tư thế đầu–cổ. "

@@ -44,6 +44,11 @@ jobs:
       - name: Tải mô hình nhận diện
         run: curl -fsSL -o pose_landmarker_lite.task "$MODEL_URL"
 
+      - name: Kiểm thử rời đi / quay lại
+        env:
+          PYTHONUTF8: "1"
+        run: python tests/test_presence.py
+
       - name: Tự kiểm tra (mã nguồn)
         env:
           PYTHONUTF8: "1"

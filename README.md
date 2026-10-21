@@ -78,9 +78,16 @@ Bấm vào icon (Windows: chuột phải) để:
 | Đầu đưa ra trước | Đầu to lên so với vai (đầu tiến lại gần camera) |
 | Ngồi quá sát màn hình | Vai to lên trên ảnh |
 | Nghiêng đầu / lệch vai | Đường nối 2 mắt hoặc 2 vai bị nghiêng |
-| Ngồi quá lâu | Ngồi liên tục 45 phút; rời khỏi camera hơn 2 phút thì tính là đã nghỉ |
+| Ngồi quá lâu | Ngồi liên tục trước màn hình 45 phút (xem *Thời gian ngồi được tính thế nào* bên dưới) |
 
 - Sai tư thế hơn 3 giây thì màn hình bắt đầu mờ (macOS) hoặc tối (Windows) dần trong khoảng 10 giây. Lớp mờ không chặn chuột và bàn phím.
+- **Thời gian ngồi được tính thế nào:** app ghi lại lúc bạn **rời khỏi màn hình** và lúc **quay lại**.
+  - Rời đi **từ 5 phút trở lên** thì tính là đã nghỉ, đồng hồ ngồi bắt đầu lại từ 0.
+  - Rời đi ngắn hơn (đi lấy nước, nghe điện thoại…): đồng hồ **dừng** trong lúc bạn vắng mặt và **chạy tiếp** khi quay lại. Thời gian vắng không bị cộng vào, nhưng cũng chưa tính là đã nghỉ.
+  - Quay người, cúi nhặt đồ dưới 10 giây vẫn tính là đang ngồi. Người khác đi ngang qua camera vài giây không bị tính là bạn quay lại.
+  - Gập máy hoặc máy ngủ được tính là vắng mặt. *Tạm dừng 30 phút* (khi họp) và lúc hiệu chỉnh không tính là ngồi, cũng không tính là nghỉ.
+  - Đã được nhắc nghỉ mà chỉ rời đi một lát, app báo *Nghỉ chưa đủ* và nhắc lại sau; nghỉ đủ thì báo *Nghỉ tốt lắm*.
+  - Bấm vào icon để xem *Ngồi liên tục … phút · nghỉ gần nhất HH:MM (… phút)*. Khi bạn vắng mặt, icon hiện *Đã rời đi … phút*.
 - **Tiết kiệm pin:** khi rút sạc, app tự giảm số khung hình xử lý từ 5 xuống 2 mỗi giây.
 - **Giới hạn:** app chỉ đo tương đối bằng một camera nhìn thẳng từ phía trước, không thay được đo đạc y khoa. Đặt camera ngang tầm mắt, thấy rõ cả hai vai thì kết quả tốt nhất.
 
@@ -93,7 +100,7 @@ Bấm vào icon (Windows: chuột phải) để:
 | Màn hình mờ khi đang ngồi đúng | Bấm **Hiệu chỉnh lại** |
 | Muốn gỡ app | Windows: Settings → Apps → PostureGuard → Uninstall. macOS: bỏ tích *Tự chạy khi mở máy*, thoát app, kéo PostureGuard từ Applications vào Thùng rác |
 
-Dữ liệu của app (tư thế chuẩn, nhật ký từng phút, nhật ký lỗi `app.log`) nằm trong thư mục `.posture_guard` ở thư mục người dùng (Windows: `C:\Users\<tên>\.posture_guard`). Xóa thư mục này để làm lại từ đầu.
+Dữ liệu của app (tư thế chuẩn, nhật ký từng phút, nhật ký rời đi / quay lại `presence_log.csv`, nhật ký lỗi `app.log`) nằm trong thư mục `.posture_guard` ở thư mục người dùng (Windows: `C:\Users\<tên>\.posture_guard`). Xóa thư mục này để làm lại từ đầu.
 
 ---
 
@@ -121,7 +128,9 @@ Các tham số thường dùng (xem đủ bằng `--help`):
 | `--camera` | `auto` | `auto`, `mac` (camera laptop), `webcam`, hoặc số thứ tự |
 | `--drop` / `--forward` / `--lean` | 0.15 / 0.12 / 0.18 | Ngưỡng cúi đầu / đầu đưa ra trước / ngồi sát màn hình (tỷ lệ) |
 | `--tilt` | 10 | Ngưỡng nghiêng đầu / lệch vai (độ) |
-| `--sit-minutes` | 45 | Ngồi bao lâu thì nhắc nghỉ |
+| `--sit-minutes` | 45 | Ngồi liên tục bao lâu thì nhắc nghỉ |
+| `--min-break` | 5 | Rời khỏi màn hình bao nhiêu phút thì tính là đã nghỉ |
+| `--away-grace` | 10 | Không thấy người bao nhiêu giây thì tính là đã rời đi |
 | `--blur-delay` / `--blur-ramp` / `--blur-max` | 3 / 10 / 0.9 | Làm mờ: chờ bao lâu, mờ trong bao lâu, mờ tối đa |
 | `--no-blur` | | Tắt làm mờ, nhắc bằng thông báo |
 | `--fps` / `--battery-fps` | 5 / 2 | Khung hình xử lý mỗi giây khi cắm sạc / dùng pin |
@@ -129,6 +138,7 @@ Các tham số thường dùng (xem đủ bằng `--help`):
 | `--no-menubar` | | Không hiện icon |
 
 Nhật ký từng phút: `~/.posture_guard/posture_log.csv` (`time, present_pct, bad_pct, top_issue, session_min`).
+Nhật ký rời đi / quay lại: `~/.posture_guard/presence_log.csv` (`left, back, away_min, is_break, sat_before_min`); kiểm thử logic bằng `python tests/test_presence.py`.
 
 ### Cấu trúc
 

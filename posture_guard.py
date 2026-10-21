@@ -35,7 +35,7 @@ from mediapipe.tasks.python.vision import (PoseLandmarker, PoseLandmarkerOptions
                                            PoseLandmarksConnections, RunningMode)
 
 APP = "PostureGuard"
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 IS_MAC = platform.system() == "Darwin"
 IS_WIN = platform.system() == "Windows"
 FROZEN = getattr(sys, "frozen", False)  # đang chạy dạng app đóng gói (PyInstaller), không phải mã nguồn
@@ -957,7 +957,104 @@ def self_test() -> int:
     return 0 if ok else 1
 
 
+# ----------------------------------------------------------------------------- rời đi / quay lại
+class PresenceTracker:
+    """
+    Theo dõi lúc rời khỏi màn hình, lúc quay lại, và thời gian ngồi liên tục.
+      - Mất dấu dưới `grace` giây (quay người, cúi nhặt đồ, nhận diện chập chờn) vẫn tính là đang ngồi.
+      - Thấy người liên tục `confirm` giây mới tính là đã quay lại (tránh người đi ngang qua camera).
+      - Vắng mặt từ `break_min` phút trở lên: tính là đã nghỉ, đồng hồ ngồi liên tục về 0.
+        Vắng mặt ngắn hơn: đồng hồ dừng lúc vắng mặt, quay lại thì chạy tiếp (không cộng thời gian vắng).
+      - Máy ngủ / gập máy (khoảng trống lớn giữa 2 lần cập nhật) được tính là vắng mặt.
+      - Tạm dừng theo dõi (suspend): khoảng thời gian tạm dừng không tính là ngồi, cũng không tính là nghỉ.
+    update(t, seen) trả về danh sách sự kiện:
+      {"type": "left", "at", "sat_min"}                         – đã rời đi (tính từ lần cuối còn thấy)
+      {"type": "back", "left_at", "at", "away_min", "is_break", "sat_min"} – đã quay lại
+      {"type": "arrived", "at"}                                 – lần đầu thấy người
+    """
+
+    def __init__(self, grace=10.0, confirm=3.0, break_min=5.0):
+        self.grace, self.confirm, self.break_sec = grace, confirm, break_min * 60
+        self.state = "unknown"      # unknown | present | away
+        self.sit_sec = 0.0          # thời gian ngồi liên tục từ lần nghỉ gần nhất
+        self.last_seen = None
+        self.left_at = None
+        self.cand_since = None      # lúc bắt đầu thấy lại người khi đang vắng mặt
+        self.suspended_at = None
+        self.last_break = None      # (rời đi, quay lại) của lần nghỉ gần nhất
+
+    def suspend(self, t) -> None:
+        if self.suspended_at is None:
+            self.suspended_at = t
+
+    def _resume(self, t) -> None:
+        d = t - self.suspended_at
+        self.suspended_at = None
+        if self.last_seen is not None:
+            self.last_seen += d
+        if self.left_at is not None:
+            self.left_at += d
+        self.cand_since = None
+
+    def update(self, t, seen: bool) -> list:
+        if self.suspended_at is not None:
+            self._resume(t)
+        ev = []
+        # đang có mặt mà quá `grace` giây không thấy (kể cả do máy ngủ) → đã rời đi từ lần cuối còn thấy
+        if self.state == "present" and t - self.last_seen >= self.grace:
+            self.state, self.left_at, self.cand_since = "away", self.last_seen, None
+            ev.append({"type": "left", "at": self.left_at, "sat_min": self.sit_sec / 60})
+
+        if self.state == "present":
+            if seen:
+                self.sit_sec += t - self.last_seen  # gồm cả lúc mất dấu ngắn dưới `grace` giây
+                self.last_seen = t
+        elif seen:
+            if self.cand_since is None or t - self.last_seen >= self.grace:
+                self.cand_since = t
+            self.last_seen = t
+            if t - self.cand_since >= self.confirm:
+                back = self.cand_since
+                if self.state == "unknown":
+                    ev.append({"type": "arrived", "at": back})
+                    self.sit_sec = t - back
+                else:
+                    away = back - self.left_at
+                    is_break = away >= self.break_sec
+                    ev.append({"type": "back", "left_at": self.left_at, "at": back, "away_min": away / 60,
+                               "is_break": is_break, "sat_min": self.sit_sec / 60})
+                    if is_break:
+                        self.sit_sec = 0.0
+                        self.last_break = (self.left_at, back)
+                    self.sit_sec += t - back
+                self.state, self.cand_since = "present", None
+        return ev
+
+    @property
+    def sit_min(self) -> float:
+        return self.sit_sec / 60
+
+    def away_min(self, t) -> float:
+        return (t - self.left_at) / 60 if self.state == "away" and self.left_at is not None else 0.0
+
+
 # ----------------------------------------------------------------------------- nhật ký
+PRESENCE_LOG = CONFIG_DIR / "presence_log.csv"
+
+
+def log_presence(ev: dict) -> None:
+    """Mỗi lần rời đi rồi quay lại: một dòng (rời đi, quay lại, vắng bao lâu, có tính là nghỉ, đã ngồi bao lâu)."""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    new = not PRESENCE_LOG.exists()
+    with PRESENCE_LOG.open("a", newline="", encoding="utf-8") as f:
+        wr = csv.writer(f)
+        if new:
+            wr.writerow(["left", "back", "away_min", "is_break", "sat_before_min"])
+        wr.writerow([datetime.fromtimestamp(ev["left_at"]).isoformat(timespec="seconds"),
+                     datetime.fromtimestamp(ev["at"]).isoformat(timespec="seconds"),
+                     round(ev["away_min"], 1), int(ev["is_break"]), round(ev["sat_min"], 1)])
+
+
 def log_minute(stats: dict) -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     new = not LOG_FILE.exists()
@@ -985,7 +1082,10 @@ def main():
     ap.add_argument("--cooldown", type=float, default=90, help="khoảng cách tối thiểu giữa 2 lần nhắc tư thế (giây)")
     ap.add_argument("--sit-minutes", type=float, default=45, help="ngồi liên tục bao lâu thì nhắc nghỉ")
     ap.add_argument("--break-repeat", type=float, default=5, help="nhắc lại nghỉ mỗi N phút nếu chưa đứng dậy")
-    ap.add_argument("--away-seconds", type=float, default=120, help="rời khỏi camera bao lâu thì tính là đã nghỉ")
+    ap.add_argument("--min-break", type=float, default=5,
+                    help="rời khỏi màn hình bao nhiêu phút thì tính là đã nghỉ (đồng hồ ngồi về 0)")
+    ap.add_argument("--away-grace", type=float, default=10,
+                    help="không thấy người bao nhiêu giây thì tính là đã rời đi (quay người, cúi nhặt đồ không tính)")
     ap.add_argument("--drop", type=float, default=0.15, help="ngưỡng cúi đầu (tỷ lệ, 0.15 = 15%%)")
     ap.add_argument("--forward", type=float, default=0.12, help="ngưỡng đầu đưa ra trước (tỷ lệ)")
     ap.add_argument("--lean", type=float, default=0.18, help="ngưỡng ngồi sát màn hình (tỷ lệ)")
@@ -1072,6 +1172,7 @@ def main():
             print(f"Dùng {cam[1]} – đã nạp tư thế chuẩn từ {path}")
             return json.loads(path.read_text())
         print(f"Dùng {cam[1]} – chưa có tư thế chuẩn cho camera này, cần hiệu chỉnh.")
+        presence.suspend(time.time())  # lúc hiệu chỉnh không tính là rời đi
         blur.set(0)
         show("grey", "Đang hiệu chỉnh tư thế chuẩn...")
         b = None
@@ -1103,8 +1204,7 @@ def main():
     keys = []
     bad_since = None
     last_posture_alert = 0.0
-    session_start = None
-    last_seen = None
+    presence = PresenceTracker(grace=args.away_grace, break_min=args.min_break)
     last_break_alert = 0.0
     minute = {"t": time.time(), "n": 0, "present": 0, "bad": 0, "issues": {}}
     print("Đang theo dõi... (Ctrl+C hoặc menu Thoát để thoát)")
@@ -1174,6 +1274,7 @@ def main():
 
             # --- tắt / tạm dừng: nhả camera (đèn camera tắt), màn hình trong lại
             if paused or pause_until:
+                presence.suspend(loop_t)
                 if cap is not None:
                     cap.release()
                     cap = None
@@ -1199,6 +1300,7 @@ def main():
                 want_calibrate = False
             elif want_calibrate:
                 want_calibrate = False
+                presence.suspend(time.time())  # lúc hiệu chỉnh không tính là rời đi
                 blur.set(0)
                 show("grey", "Đang hiệu chỉnh tư thế chuẩn...")
                 new = calibrate(cap, pose, baseline_file(cam[2]), preview=args.preview, stop=stop_requested,
@@ -1225,13 +1327,33 @@ def main():
                     draw_skeleton(frame, lms)
 
             minute["n"] += 1
-            if m:
-                # --- có người ngồi
-                if session_start is None or (last_seen and now - last_seen > args.away_seconds):
-                    session_start = now
-                    last_break_alert = 0.0
+            # --- rời đi / quay lại: thấy người là đủ (kể cả quay nghiêng, chưa thấy rõ hai vai)
+            for ev in presence.update(now, lms is not None):
+                hm = lambda ts: datetime.fromtimestamp(ts).strftime("%H:%M")
+                if ev["type"] == "left":
+                    print(f"[{hm(ev['at'])}] Rời khỏi màn hình (đã ngồi liên tục {ev['sat_min']:.0f} phút)", flush=True)
+                elif ev["type"] == "arrived":
+                    print(f"[{hm(ev['at'])}] Bắt đầu ngồi", flush=True)
+                elif ev["type"] == "back":
+                    log_presence(ev)
                     ema.reset()
-                last_seen = now
+                    away = ev["away_min"]
+                    away_txt = f"{away:.0f} phút" if away >= 1 else f"{away * 60:.0f} giây"
+                    print(f"[{hm(ev['at'])}] Quay lại sau {away_txt} (rời đi lúc {hm(ev['left_at'])}) – "
+                          + ("tính là đã nghỉ, đồng hồ ngồi bắt đầu lại" if ev["is_break"]
+                             else f"chưa đủ {args.min_break:g} phút nên chưa tính là nghỉ, "
+                                  f"đồng hồ ngồi chạy tiếp từ {presence.sit_min:.0f} phút"), flush=True)
+                    if last_break_alert:  # đã được nhắc nghỉ: cho biết lần rời đi này có đủ chưa
+                        if ev["is_break"]:
+                            notify("Nghỉ tốt lắm", f"Bạn đã nghỉ {away_txt}. Đồng hồ ngồi bắt đầu lại.")
+                        else:
+                            notify("Nghỉ chưa đủ", f"Bạn mới rời đi {away_txt}; nên nghỉ ít nhất "
+                                                  f"{args.min_break:g} phút. Sẽ nhắc lại sau.")
+                            last_break_alert = now  # "nhắc lại sau" tính từ lúc này, không báo dồn 2 lần
+                    if ev["is_break"]:
+                        last_break_alert = 0.0
+            if m:
+                # --- có người ngồi, thấy rõ đầu và vai
                 minute["present"] += 1
                 issues = assess(ema(m), base, sens)
 
@@ -1248,18 +1370,20 @@ def main():
                 else:
                     bad_since = None
 
-                # --- ngồi quá lâu
-                sat_min = (now - session_start) / 60
+            # --- ngồi quá lâu: chỉ tính thời gian thực sự ngồi trước màn hình
+            if presence.state == "present":
+                sat_min = presence.sit_min
                 if sat_min >= args.sit_minutes and now - last_break_alert >= args.break_repeat * 60:
-                    notify("Đến giờ nghỉ", f"Đã ngồi {sat_min:.0f} phút. Đứng dậy, vận động cổ vai 2–3 phút.")
+                    notify("Đến giờ nghỉ", f"Đã ngồi liên tục {sat_min:.0f} phút. Đứng dậy, rời khỏi màn hình "
+                                           f"ít nhất {args.min_break:g} phút, vận động cổ vai.")
                     last_break_alert = now
-            else:
+            if not m:
                 bad_since = None
 
             # --- ghi nhật ký mỗi phút
             if now - minute["t"] >= 60 and minute["n"]:
                 top = max(minute["issues"], key=minute["issues"].get) if minute["issues"] else ""
-                sess = (now - session_start) / 60 if session_start and last_seen and now - last_seen < args.away_seconds else 0
+                sess = presence.sit_min if presence.state == "present" else 0
                 log_minute({
                     "present_pct": round(100 * minute["present"] / minute["n"]),
                     "bad_pct": round(100 * minute["bad"] / max(minute["present"], 1)),
@@ -1275,9 +1399,20 @@ def main():
                 blur.set(0)
 
             # --- icon thanh menu: xanh = tốt, đỏ = sai, xám = không thấy người
-            sat = f"Đã ngồi {(now - session_start) / 60:.0f} phút" if m and session_start else ""
-            if not m:
-                show("grey", "Không thấy người")
+            sat = ""
+            if presence.state == "present":
+                sat = f"Ngồi liên tục {presence.sit_min:.0f} phút"
+                if presence.last_break:
+                    lb_left, lb_back = presence.last_break
+                    sat += (f" · nghỉ gần nhất {datetime.fromtimestamp(lb_left):%H:%M} "
+                            f"({(lb_back - lb_left) / 60:.0f} phút)")
+            if presence.state == "away":
+                away = presence.away_min(now)
+                show("grey", f"Đã rời đi {away:.0f} phút" + (" – đã đủ giờ nghỉ" if away >= args.min_break else ""),
+                     f"Rời đi lúc {datetime.fromtimestamp(presence.left_at):%H:%M}, "
+                     f"trước đó ngồi {presence.sit_min:.0f} phút")
+            elif not m:
+                show("grey", "Không thấy rõ đầu và vai", sat)
             elif issues:
                 show("red", "Sai tư thế: " + ", ".join(issues), sat)
             else:
@@ -1287,8 +1422,8 @@ def main():
                 color = (0, 0, 255) if issues else (0, 200, 0)
                 status = "; ".join(issues) if issues else ("OK" if m else "Khong thay nguoi")
                 cv2.putText(frame, status, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-                if session_start and m:
-                    cv2.putText(frame, f"Ngoi: {(now - session_start) / 60:.0f} phut", (10, 60),
+                if presence.state == "present":
+                    cv2.putText(frame, f"Ngoi lien tuc: {presence.sit_min:.0f} phut", (10, 60),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
                 cv2.imshow(APP, frame)
                 keys = read_key()
